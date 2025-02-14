@@ -1,0 +1,33 @@
+# Description: Serverless configuration file for the S3 Object Lambda Redaction service. It defines the service name,
+# provider, plugins, and functions. The serverless framework is used to deploy to AWS. The tracing and log
+# configurations are set to true for both Lambda and API Gateway. The plugins used are serverless-plugin-tracing and
+# serverless-plugin-log-subscription. This will get you up and running with a CloudWatch log group for each Lambda
+# function. AWS X-Ray will be enabled for the Lambda function and for the API Gateway.
+#
+frameworkVersion: '3'
+configValidationMode: error
+variablesResolutionMode: 20210326
+useRuntimePlugins: true
+disableReferencedCodeDownload: false
+
+app: s3-object-lambda-redaction
+service: s3-object-lambda-redaction
+provider:
+  name: aws
+  runtime: python3.8
+  tracing:
+    lambda: true
+    apiGateway: true
+  logs:
+    restApi: true
+
+plugins:
+  - serverless-plugin-tracing
+  - serverless-plugin-log-subscription
+
+functions:
+  conveyanceLambdaFunction:
+    handler: conveyancelambdafunction.lambda_handler
+    events:
+      - http:
+          path: conveyance

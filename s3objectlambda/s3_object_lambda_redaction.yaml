@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for S3 Object Lambda handling PII redaction.
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-data-bucket
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${DataBucket}/*"
+
+  UnderwritingLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.8
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          import boto3
+          from botocore.exceptions import ClientError
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def handler(event, context):
+              try:
+                  # Log the incoming event
+                  logger.info("Processing event: %s", json.dumps(event))
+
+                  # Process and serve unredacted data
+                  data = "... read data from S3 object ..."
+
+                  return {
+                      "statusCode": 200,
+                      "body": json.dumps({"data": data})
+                  }
+              except ClientError as e:
+                  logger.error("AWS service error: %s", str(e))
+                  raise
+              except Exception as e:
+                  logger.error("Unexpected error: %s", str(e))
+                  return {
+                      "statusCode": 500,
+                      "body": json.dumps({"error": "Internal server error"})
+                  }
+
+  ConveyanceLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.8
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def redact_partially(data):
+              try:
+                  # Demo redaction logic
+                  return f"partially redacted {data}"
+              except Exception as e:
+                  logger.error("Redaction error: %s", str(e))
+                  raise
+
+          def handler(event, context):
+              try:
+                  logger.info("Processing event: %s", json.dumps(event))
+                  data = "... read data from S3 object ..."
+                  redacted_data = redact_partially(data)
+
+                  return {
+                      "statusCode": 200,
+                      "body": json.dumps({"data": redacted_data})
+                  }
+              except Exception as e:
+                  logger.error("Handler error: %s", str(e))
+                  return {
+                      "statusCode": 500,
+                      "body": json.dumps({"error": "Processing error"})
+                  }
